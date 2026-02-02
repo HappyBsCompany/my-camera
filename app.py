@@ -64,8 +64,11 @@ def resize_image(image, max_size_mb=4.8):
         quality -= 5
 
 # 5. 노션 전송 함수
-def send_to_notion(date, loc, note):
+def send_to_notion(date, loc, note, lat, lon):
     try:
+        # 네이버 지도 좌표 검색 URL 생성
+        naver_map_url = f"https://map.naver.com/v5/search/{lat},{lon}"
+        
         # [cite_start]노션 컬럼 이름: 일시, 장소, 비고와 일치해야 함 [cite: 1]
         notion.pages.create(
             parent={"database_id": DATABASE_ID},
@@ -73,6 +76,18 @@ def send_to_notion(date, loc, note):
                 "일시": {"title": [{"text": {"content": date}}]},
                 "장소": {"rich_text": [{"text": {"content": loc}}]},
                 "비고": {"rich_text": [{"text": {"content": note}}]},
+                # 새로 만드신 '위치도' 컬럼에 링크 삽입
+                "위치도": {
+                    "rich_text": [
+                        {
+                            "text": {
+                                "content": "📍 네이버 지도에서 보기", 
+                                "link": {"url": naver_map_url}
+                            },
+                            "annotations": {"bold": True, "color": "blue"}
+                        }
+                    ]
+                },
             }
         )
         return True
@@ -81,10 +96,12 @@ def send_to_notion(date, loc, note):
         return False
 
 # --- UI 레이아웃 시작 ---
-st.title("📸 서우배드민턴 클럽 정밀 기록기")
+st.title("📸 농어촌공사 현장사진")
 
 # [cite_start]위치 정보 가져오기 [cite: 1]
 loc_info = get_geolocation()
+lat, lon = None, None # 변수 초기화
+
 if loc_info:
     lat, lon = loc_info['coords']['latitude'], loc_info['coords']['longitude']
     if 'address' not in st.session_state:
@@ -139,8 +156,12 @@ if img_file:
         st.download_button(label="💾 사진첩 저장", data=compressed_file, file_name=f"{val_date}.jpg", mime="image/jpeg")
     with c2:
         if st.button("🚀 노션으로 전송"):
-            if send_to_notion(val_date, val_loc, val_note):
-                st.success("노션 전송 성공!")
+            if lat and lon:
+            if send_to_notion(val_date, val_loc, val_note, lat, lon):
+                st.success("노션에 위치도 링크와 함께 기록되었습니다!")
                 st.balloons()
+            else:
+                st.error("위치 정보를 가져올 수 없어 전송할 수 없습니다.")
+
 
 
