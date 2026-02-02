@@ -73,8 +73,8 @@ def send_to_notion(date, loc, note):
                 "일시": {"title": [{"text": {"content": date}}]},
                 "장소": {"rich_text": [{"text": {"content": loc}}]},
                 "비고": {"rich_text": [{"text": {"content": note}}]},
-            }
-# 2. 페이지 본문에 사진 추가 (이미지 URL이 있을 경우)
+            },
+            # 2. 페이지 본문에 사진 추가 (이미지 URL이 있을 경우)
             children=[
                 {
                     "object": "block",
@@ -153,3 +153,4 @@ if img_file:
             if send_to_notion(val_date, val_loc, val_note):
                 st.success("노션 전송 성공!")
                 st.balloons()
+
