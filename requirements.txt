@@ -1,2 +1,6 @@
 streamlit
-Pillow
+pillow
+geopy
+notion-client
+python-dotenv
+streamlit-js-eval
