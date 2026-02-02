@@ -20,7 +20,7 @@ notion = Client(auth=NOTION_TOKEN)
 # 2. 한글 폰트 설정
 def get_font(size):
     # [cite_start]윈도우 환경 기본 폰트 경로 (malgun.ttf 또는 nanum.ttf) 
-    font_path = "C:/Windows/Fonts/malgun.ttf" 
+    font_path = "malgun.ttf" 
     if os.path.exists(font_path):
         return ImageFont.truetype(font_path, size)
     return ImageFont.load_default()
@@ -73,18 +73,7 @@ def send_to_notion(date, loc, note):
                 "일시": {"title": [{"text": {"content": date}}]},
                 "장소": {"rich_text": [{"text": {"content": loc}}]},
                 "비고": {"rich_text": [{"text": {"content": note}}]},
-            },
-            # 2. 페이지 본문에 사진 추가 (이미지 URL이 있을 경우)
-            children=[
-                {
-                    "object": "block",
-                    "type": "image",
-                    "image": {
-                        "type": "external",
-                        "external": {"url": image_url} if image_url else {"url": "https://via.placeholder.com/300"}
-                    }
-                }
-            ] if image_url else []
+            }
         )
         return True
     except Exception as e:
@@ -153,4 +142,5 @@ if img_file:
             if send_to_notion(val_date, val_loc, val_note):
                 st.success("노션 전송 성공!")
                 st.balloons()
+
 
