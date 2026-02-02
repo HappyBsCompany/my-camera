@@ -157,11 +157,13 @@ if img_file:
     with c2:
         if st.button("🚀 노션으로 전송"):
             if lat and lon:
-            if send_to_notion(val_date, val_loc, val_note, lat, lon):
-                st.success("노션에 위치도 링크와 함께 기록되었습니다!")
-                st.balloons()
+                # 이 아래 줄들이 if 문 안으로 정확히 들어가야 합니다.
+                if send_to_notion(val_date, val_loc, val_note, lat, lon):
+                    st.success("노션에 위치도 링크와 함께 기록되었습니다!")
+                    st.balloons()
             else:
                 st.error("위치 정보를 가져올 수 없어 전송할 수 없습니다.")
+
 
 
 
