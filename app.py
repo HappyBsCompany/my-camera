@@ -2,56 +2,53 @@ import streamlit as st
 from PIL import Image, ImageDraw, ImageFont
 import io
 import os
+import requests
 from datetime import datetime
-import re
 from streamlit_js_eval import get_geolocation
-from geopy.geocoders import Nominatim
 from notion_client import Client
 import time
 from dotenv import load_dotenv
 
-# [cite_start]1. 보안 정보 로드 (.env 파일이 같은 폴더에 있어야 함) 
+# 1. 보안 정보 로드
 load_dotenv()
 NOTION_TOKEN = os.getenv("NOTION_TOKEN")
 DATABASE_ID = os.getenv("DATABASE_ID")
+NAVER_CLIENT_ID = os.getenv("NAVER_CLIENT_ID")
+NAVER_CLIENT_SECRET = os.getenv("NAVER_CLIENT_SECRET")
 
 notion = Client(auth=NOTION_TOKEN)
 
 # 2. 한글 폰트 설정
 def get_font(size):
-    # [cite_start]윈도우 환경 기본 폰트 경로 (malgun.ttf 또는 nanum.ttf) 
-    font_path = "malgun.ttf" 
-    if os.path.exists(font_path):
-        return ImageFont.truetype(font_path, size)
+    # 리눅스/클라우드 환경 대응을 위해 기본 폰트 설정 보강
+    font_paths = ["C:/Windows/Fonts/malgun.ttf", "/usr/share/fonts/truetype/nanum/NanumGothic.ttf", "malgun.ttf"]
+    for path in font_paths:
+        if os.path.exists(path):
+            return ImageFont.truetype(path, size)
     return ImageFont.load_default()
 
-# [cite_start]3. 상세 주소 변환 함수 (생략되었던 부분) [cite: 1]
-def get_korean_address(lat, lon):
-    for i in range(3):
-        try:
-            # [cite_start]Nominatim 서비스 사용 시 유니크한 user_agent 설정 [cite: 1]
-            geolocator = Nominatim(user_agent=f"seowoo_final_{int(time.time())}")
-            location = geolocator.reverse(f"{lat}, {lon}", language='ko', timeout=10)
-            if location:
-                raw = location.raw.get('address', {})
-                # 한국식 지번/도로명 주소 구성 요소 추출
-                p = raw.get('province', raw.get('city', ''))
-                c = raw.get('county', raw.get('borough', ''))
-                t = raw.get('town', raw.get('village', raw.get('suburb', '')))
-                r = raw.get('road', raw.get('neighbourhood', ''))
-                h = raw.get('house_number', '')  # 번지수
-                
-                addr_list = [p, c, t, r, h]
-                filtered = [item for item in addr_list if item and item not in ['대한민국']]
-                if filtered:
-                    return " ".join(filtered).strip()
-            return f"좌표 기록 ({lat:.4f}, {lon:.4f})"
-        except:
-            time.sleep(1)
-            continue
-    return f"좌표 기록 ({lat:.4f}, {lon:.4f})"
+# 3. [정밀도 향상] 네이버 주소 변환 함수
+def get_naver_address(lat, lon):
+    url = f"https://naveropenapi.apigw.ntruss.com/map-reversegeocode/v2/gc?coords={lon},{lat}&output=json&orders=addr,roadaddr"
+    headers = {
+        "X-NCP-APIGW-API-KEY-ID": NAVER_CLIENT_ID,
+        "X-NCP-APIGW-API-KEY": NAVER_CLIENT_SECRET
+    }
+    try:
+        res = requests.get(url, headers=headers)
+        if res.status_code == 200:
+            data = res.json()
+            if data['results']:
+                r = data['results'][0]['region']
+                addr = f"{r['area1']['name']} {r['area2']['name']} {r['area3']['name']} {r['area4']['name']}".strip()
+                land = data['results'][0].get('land', {})
+                num = land.get('number1', '')
+                return f"{addr} {num}".strip()
+    except:
+        pass
+    return f"좌표: {lat:.4f}, {lon:.4f}"
 
-# [cite_start]4. 사진 용량 압축 함수 (5MB 제한 준수) [cite: 1]
+# 4. 사진 용량 압축 함수
 def resize_image(image, max_size_mb=4.8):
     quality = 95
     while True:
@@ -63,31 +60,29 @@ def resize_image(image, max_size_mb=4.8):
             return output, size_mb
         quality -= 5
 
-# 5. 노션 전송 함수
+# 5. [오류 수정] 노션 전송 함수 (위치도 링크 포함)
 def send_to_notion(date, loc, note, lat, lon):
     try:
-        # 네이버 지도 좌표 검색 URL 생성
+        # 네이버 지도 링크 생성
         naver_map_url = f"https://map.naver.com/v5/search/{lat},{lon}"
         
-        # [cite_start]노션 컬럼 이름: 일시, 장소, 비고와 일치해야 함 [cite: 1]
         notion.pages.create(
             parent={"database_id": DATABASE_ID},
             properties={
                 "일시": {"title": [{"text": {"content": date}}]},
                 "장소": {"rich_text": [{"text": {"content": loc}}]},
                 "비고": {"rich_text": [{"text": {"content": note}}]},
-                # 새로 만드신 '위치도' 컬럼에 링크 삽입
                 "위치도": {
                     "rich_text": [
                         {
                             "text": {
-                                "content": "📍 네이버 지도에서 보기", 
+                                "content": "📍 네이버 지도 보기", 
                                 "link": {"url": naver_map_url}
                             },
                             "annotations": {"bold": True, "color": "blue"}
                         }
                     ]
-                },
+                }
             }
         )
         return True
@@ -95,28 +90,27 @@ def send_to_notion(date, loc, note, lat, lon):
         st.error(f"노션 전송 오류: {e}")
         return False
 
-# --- UI 레이아웃 시작 ---
-st.title("📸 농어촌공사 현장사진")
+# --- UI 레이아웃 ---
+st.title("📸 농어촌공사 현장 정밀 기록기")
 
-# [cite_start]위치 정보 가져오기 [cite: 1]
 loc_info = get_geolocation()
-lat, lon = None, None # 변수 초기화
+lat, lon = None, None
 
-if loc_info:
-    lat, lon = loc_info['coords']['latitude'], loc_info['coords']['longitude']
+if loc_info and 'coords' in loc_info:
+    lat = loc_info['coords']['latitude']
+    lon = loc_info['coords']['longitude']
     if 'address' not in st.session_state:
-        st.session_state.address = get_korean_address(lat, lon)
+        st.session_state.address = get_naver_address(lat, lon)
     final_address = st.session_state.address
 else:
     final_address = "위치 확인 중..."
 
-img_file = st.camera_input("오늘의 활동 촬영")
+img_file = st.camera_input("현장 촬영")
 
 if img_file:
     base_img = Image.open(img_file).convert("RGBA")
     w, h = base_img.size
     
-    st.subheader("📝 기록 정보 확인")
     col1, col2 = st.columns(2)
     with col1:
         val_date = st.text_input("일시", datetime.now().strftime("%Y-%m-%d"))
@@ -124,46 +118,27 @@ if img_file:
         val_loc = st.text_input("장소", final_address)
     val_note = st.text_area("비고", "특이사항 없음")
 
-    # --- 이미지 합성 (하단 밀착 정중앙) ---
+    # 이미지 합성 로직
     overlay = Image.new("RGBA", (w, h), (255, 255, 255, 0))
     draw = ImageDraw.Draw(overlay)
     rect_h, margin = int(h * 0.15), 25
     rect_bottom = h - 15
     rect_top = rect_bottom - rect_h
     
-    # [cite_start]반투명 배경 및 표 디자인 [cite: 1]
     draw.rectangle([(margin, rect_top), (w - margin, rect_bottom)], fill=(255, 255, 255, 200))
     font_main = get_font(int(h * 0.026))
-    mid_y, mid_x = rect_top + (rect_h // 2), w // 2
     
-    draw.line([(margin, rect_top), (w - margin, rect_top)], fill="black", width=4)
-    draw.line([(margin, mid_y), (w - margin, mid_y)], fill="gray", width=2)
-    draw.line([(margin, rect_bottom), (w - margin, rect_bottom)], fill="black", width=4)
-    draw.line([(mid_x, rect_top + 5), (mid_x, mid_y - 5)], fill="gray", width=2)
-
-    draw.text(((margin + mid_x) // 2, (rect_top + mid_y) // 2), f"일시: {val_date}", fill="black", font=font_main, anchor="mm")
-    draw.text(((mid_x + (w - margin)) // 2, (rect_top + mid_y) // 2), f"장소: {val_loc}", fill="black", font=font_main, anchor="mm")
-    draw.text((w // 2, (mid_y + rect_bottom) // 2), f"비고: {val_note}", fill="black", font=font_main, anchor="mm")
+    draw.text((w // 2, rect_top + rect_h // 4), f"일시: {val_date} | 장소: {val_loc}", fill="black", font=font_main, anchor="mm")
+    draw.text((w // 2, rect_top + (rect_h * 3) // 4), f"비고: {val_note}", fill="black", font=font_main, anchor="mm")
 
     combined = Image.alpha_composite(base_img, overlay).convert("RGB")
+    compressed_file, _ = resize_image(combined)
+    st.image(compressed_file, use_container_width=True)
     
-    # [cite_start]노션 업로드용 압축 실행 [cite: 1]
-    compressed_file, final_size = resize_image(combined)
-    st.image(compressed_file, caption=f"최적화 완료 ({final_size:.2f}MB)", use_container_width=True)
-    
-    c1, c2 = st.columns(2)
-    with c1:
-        st.download_button(label="💾 사진첩 저장", data=compressed_file, file_name=f"{val_date}.jpg", mime="image/jpeg")
-    with c2:
-        if st.button("🚀 노션으로 전송"):
-            if lat and lon:
-                # 이 아래 줄들이 if 문 안으로 정확히 들어가야 합니다.
-                if send_to_notion(val_date, val_loc, val_note, lat, lon):
-                    st.success("노션에 위치도 링크와 함께 기록되었습니다!")
-                    st.balloons()
-            else:
-                st.error("위치 정보를 가져올 수 없어 전송할 수 없습니다.")
-
-
-
-
+    if st.button("🚀 노션으로 전송"):
+        if lat and lon:
+            if send_to_notion(val_date, val_loc, val_note, lat, lon):
+                st.success("노션에 성공적으로 기록되었습니다!")
+                st.balloons()
+        else:
+            st.error("위치 정보가 잡히지 않았습니다.")
