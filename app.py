@@ -27,25 +27,41 @@ def get_font(size):
             return ImageFont.truetype(path, size)
     return ImageFont.load_default()
 
-# 3. [정밀도 향상] 네이버 주소 변환 함수
+# 3. [체크 포인트] 네이버 주소 변환 함수
 def get_naver_address(lat, lon):
+    # 키가 비어있는지 확인
+    if not NAVER_CLIENT_ID or not NAVER_CLIENT_SECRET:
+        return f"키 설정 오류 ({lat:.4f}, {lon:.4f})"
+
     url = f"https://naveropenapi.apigw.ntruss.com/map-reversegeocode/v2/gc?coords={lon},{lat}&output=json&orders=addr,roadaddr"
     headers = {
         "X-NCP-APIGW-API-KEY-ID": NAVER_CLIENT_ID,
         "X-NCP-APIGW-API-KEY": NAVER_CLIENT_SECRET
     }
+    
     try:
         res = requests.get(url, headers=headers)
         if res.status_code == 200:
             data = res.json()
             if data['results']:
                 r = data['results'][0]['region']
+                # 상세 지번까지 합치기
                 addr = f"{r['area1']['name']} {r['area2']['name']} {r['area3']['name']} {r['area4']['name']}".strip()
                 land = data['results'][0].get('land', {})
-                num = land.get('number1', '')
-                return f"{addr} {num}".strip()
-    except:
-        pass
+                num1 = land.get('number1', '')
+                num2 = land.get('number2', '')
+                
+                final_addr = f"{addr} {num1}"
+                if num2: final_addr += f"-{num2}"
+                return final_addr.strip()
+            else:
+                return "주소를 찾을 수 없는 지역입니다."
+        else:
+            # API 호출 실패 시 에러 코드 확인용
+            return f"API 오류 ({res.status_code})"
+    except Exception as e:
+        return f"연결 실패: {str(e)[:20]}"
+    
     return f"좌표: {lat:.4f}, {lon:.4f}"
 
 # 4. 사진 용량 압축 함수
