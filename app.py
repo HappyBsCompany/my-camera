@@ -13,6 +13,13 @@ DATABASE_ID = st.secrets.get("DATABASE_ID")
 
 notion = Client(auth=NOTION_TOKEN)
 
+# 진단용 코드 (임시로 추가해서 확인 후 삭제하세요)
+if not NAVER_CLIENT_ID:
+    st.error("🚨 Secrets에서 ID를 읽어오지 못했습니다!")
+else:
+    # 보안을 위해 앞 3글자만 보여줍니다.
+    st.info(f"검사 중: ID는 '{NAVER_CLIENT_ID[:3]}...', Secret은 '{NAVER_CLIENT_SECRET[:3]}...'으로 시작합니다.")
+
 def get_font(size):
     font_paths = ["C:/Windows/Fonts/malgun.ttf", "/usr/share/fonts/truetype/nanum/NanumGothic.ttf", "malgun.ttf"]
     for path in font_paths:
@@ -74,3 +81,4 @@ if img_file:
         # send_to_notion 호출 시 lat, lon 전달 확인
         # (기존 send_to_notion 함수 내용 그대로 사용)
         pass
+
