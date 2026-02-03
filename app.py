@@ -10,6 +10,8 @@ def get_clean_secret(key):
     val = st.secrets.get(key)
     return str(val).strip().replace('"', '').replace("'", "") if val else None
 
+st.write("### 현재 작동 중인 프로젝트: [프로젝트A 또는 B 이름]")
+
 NAVER_ID = get_clean_secret("NAVER_CLIENT_ID")
 NAVER_SECRET = get_clean_secret("NAVER_CLIENT_SECRET")
 NOTION_TOKEN = get_clean_secret("NOTION_TOKEN")
@@ -70,3 +72,4 @@ if img_file:
     # (이미지 처리/노션 전송 로직은 이전과 동일하게 유지)
     # 생략된 부분은 이전 코드의 4번, 5번 항목과 같습니다.
     pass
+
